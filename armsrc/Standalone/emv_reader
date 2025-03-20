@@ -1,0 +1,68 @@
+#include "standalone.h"
+#include "proxmark3.h"
+#include "rf.h"
+#include "flash.h"
+#include "apdu.h"
+#include "led.h"
+
+void RunMod(void) {
+    // 1. Initialize HF mode for EMV card reading (13.56 MHz)
+    rf_init();
+    rf_set_mode(RF_MODE_HF);
+
+    // 2. Detect an EMV card
+    uint8_t card_detected = detect_emv_card();
+    if (!card_detected) {
+        led_on(LED_ERROR);  // Indicate error (no card detected)
+        return;
+    }
+    
+    led_on(LED_OK);  // Indicate card detected (green LED)
+
+    // 3. Send APDU command to retrieve card data (e.g., PAN, Expiry Date)
+    uint8_t apdu_command[] = {0x00, 0xB0, 0x00, 0x00, 0x10};  // Example command
+    uint8_t response[256];
+    int response_length = send_apdu_command(apdu_command, sizeof(apdu_command), response);
+
+    if (response_length <= 0) {
+        led_on(LED_ERROR);  // Indicate error (failed to read data)
+        return;
+    }
+
+    // 4. Parse the EMV response to extract card information
+    char pan[20];
+    char expiry[5];
+    parse_emv_response(response, pan, expiry);
+
+    // 5. Store the parsed data in flash memory
+    flash_write_data(pan, sizeof(pan));
+    flash_write_data(expiry, sizeof(expiry));
+
+    // 6. Indicate success via LEDs or beeps
+    led_on(LED_OK);  // Green LED for success
+    beep(1);         // Beep once to indicate success
+}
+
+void ModInfo(void) {
+    // Provide module information (for debugging or identification)
+    printf("Standalone EMV Card Reader Mode\n");
+}
+
+// Function to detect if an EMV card is present
+uint8_t detect_emv_card(void) {
+    // Implement the logic to detect an EMV card (based on RF signal or proximity)
+    return 1;  // For demonstration, always return 1 (card detected)
+}
+
+// Function to send APDU command to the EMV card
+int send_apdu_command(uint8_t *command, int command_length, uint8_t *response) {
+    // Implement APDU communication logic
+    memcpy(response, "EMV_CARD_DATA", 14);  // Placeholder for EMV data response
+    return 14;
+}
+
+// Function to parse the EMV card response and extract PAN and Expiry Date
+void parse_emv_response(uint8_t *response, char *pan, char *expiry) {
+    strncpy(pan, (char *)response, 16);
+    strncpy(expiry, (char *)(response + 16), 4);
+}
